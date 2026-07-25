@@ -132,7 +132,7 @@
   }
   .bank-config .grid-3 {
     display: grid;
-    grid-template-columns: 1.4fr 1fr 1fr auto;
+    grid-template-columns: 1.2fr 1fr 1fr 1fr auto;
     gap: 10px;
     align-items: end;
   }
@@ -226,7 +226,7 @@ function cctINR(grossINR) {
 var toptalWireFee = 10;
 var bankIdSeq = 0;
 var banks = [
-  { id: bankIdSeq++, name: 'ICICI', swiftFee: 0, markupPaise: 8 }
+  { id: bankIdSeq++, name: 'ICICI', swiftFee: 0, markupPaise: 8, intermediaryFeeUSD: 0 }
 ];
 
 function renderBankConfigs() {
@@ -236,6 +236,7 @@ function renderBankConfigs() {
       '<div class="grid-3">' +
         '<div><label>Bank name</label><input type="text" class="bank-name" value="' + b.name + '"></div>' +
         '<div><label>Inward remittance / SWIFT fee (\u20b9)</label><input type="number" class="bank-swift" value="' + b.swiftFee + '" step="1"></div>' +
+        '<div><label>Intermediary bank charge ($)</label><input type="number" class="bank-intermediary" value="' + b.intermediaryFeeUSD + '" step="1"></div>' +
         '<div><label>Bank markup (paise)</label><input type="number" class="bank-markup" value="' + b.markupPaise + '" step="1"></div>' +
         '<button type="button" class="remove-btn">Remove</button>' +
       '</div>' +
@@ -255,6 +256,10 @@ function renderBankConfigs() {
     });
     el.querySelector('.bank-markup').addEventListener('input', function(e) {
       bank.markupPaise = parseFloat(e.target.value) || 0;
+      calc();
+    });
+    el.querySelector('.bank-intermediary').addEventListener('input', function(e) {
+      bank.intermediaryFeeUSD = parseFloat(e.target.value) || 0;
       calc();
     });
     el.querySelector('.remove-btn').addEventListener('click', function() {
@@ -295,8 +300,9 @@ function calc() {
 
   var breakdownsHTML = '';
   banks.forEach(function(b) {
+    var netUSD3 = netUSD2 - b.intermediaryFeeUSD;
     var bankRate = rate - b.markupPaise / 100;
-    var grossINR = netUSD2 * bankRate;
+    var grossINR = netUSD3 * bankRate;
     var swiftFeeGST = b.swiftFee * 0.18;
     var swiftFeeTotal = b.swiftFee + swiftFeeGST;
     var cct = cctINR(grossINR);
@@ -308,7 +314,8 @@ function calc() {
       '<div class="section"><p class="heading">' + (b.name || 'Bank') + ' breakdown</p><table>' +
       row('Toptal amount', '$' + fmt(amount)) +
       row('Toptal wire transfer fee', '-$' + fmt(toptalWireFee)) +
-      row('Net USD received', '$' + fmt(netUSD2)) +
+      row('Intermediary bank charge', '-$' + fmt(b.intermediaryFeeUSD)) +
+      row('Net USD received', '$' + fmt(netUSD3)) +
       row((b.name || 'Bank') + ' rate (interbank - ' + fmt(b.markupPaise) + 'p)', '\u20b9' + fmt(bankRate) + '/USD') +
       row('Gross INR (before charges)', '\u20b9' + fmt(grossINR)) +
       row('SWIFT / inward remittance fee', '-\u20b9' + fmt(b.swiftFee)) +
@@ -337,7 +344,7 @@ function calc() {
 document.getElementById('rate').addEventListener('input', calc);
 document.getElementById('amount').addEventListener('input', calc);
 document.getElementById('add-bank-btn').addEventListener('click', function() {
-  banks.push({ id: bankIdSeq++, name: '', swiftFee: 0, markupPaise: 0 });
+  banks.push({ id: bankIdSeq++, name: '', swiftFee: 0, markupPaise: 0, intermediaryFeeUSD: 0 });
   renderBankConfigs();
   calc();
 });
