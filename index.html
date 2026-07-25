@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toptal transfer calculator — Skydo vs ICICI</title>
+<style>
+  :root {
+    --surface-2: #ffffff;
+    --surface-1: #f4f3ef;
+    --surface-0: #ebeae4;
+    --text-primary: #1a1a18;
+    --text-secondary: #6b6a64;
+    --border: #ddd9d0;
+    --border-strong: #c7c2b6;
+    --radius: 8px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 2rem 1rem;
+    line-height: 1.5;
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    background: var(--surface-2);
+    border-radius: 16px;
+    padding: 2rem;
+    border: 0.5px solid var(--border);
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 1.5rem;
+  }
+  label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 4px;
+  }
+  input[type="number"] {
+    width: 100%;
+    height: 36px;
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border-strong);
+    padding: 0 10px;
+    font-size: 14px;
+    background: var(--surface-2);
+    color: var(--text-primary);
+  }
+  input[type="number"]:focus {
+    outline: none;
+    border-color: #5b8def;
+    box-shadow: 0 0 0 2px rgba(91,141,239,0.25);
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+  .card {
+    background: var(--surface-1);
+    border-radius: 12px;
+    padding: 1rem;
+  }
+  .card p:first-child {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 4px;
+  }
+  .card p:last-child {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0;
+  }
+  #winner {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+  }
+  .section {
+    border-top: 0.5px solid var(--border);
+    padding-top: 1rem;
+    margin-bottom: 1rem;
+  }
+  .section p.heading {
+    font-weight: 600;
+    font-size: 14px;
+    margin: 0 0 8px;
+  }
+  table {
+    width: 100%;
+    font-size: 13px;
+    border-collapse: collapse;
+  }
+  td {
+    padding: 4px 0;
+  }
+  td:last-child {
+    text-align: right;
+  }
+  td.label {
+    color: var(--text-secondary);
+  }
+  td.bold {
+    font-weight: 600;
+  }
+  footer {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 1.5rem;
+  }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Toptal transfer calculator</h1>
+  <p class="subtitle">Compare INR credit: Skydo vs ICICI wire transfer</p>
+
+  <div class="grid-2">
+    <div>
+      <label for="rate">Interbank rate (INR/USD)</label>
+      <input type="number" id="rate" value="83.50" step="0.01">
+    </div>
+    <div>
+      <label for="amount">Toptal transfer amount (USD)</label>
+      <input type="number" id="amount" value="5000" step="1">
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <p>Skydo net credit</p>
+      <p id="skydo-total">-</p>
+    </div>
+    <div class="card">
+      <p>ICICI net credit</p>
+      <p id="icici-total">-</p>
+    </div>
+  </div>
+
+  <div id="winner"></div>
+
+  <div class="section">
+    <p class="heading">Skydo breakdown</p>
+    <table id="skydo-table"></table>
+  </div>
+
+  <div class="section">
+    <p class="heading">ICICI breakdown</p>
+    <table id="icici-table"></table>
+  </div>
+
+  <footer>Rates and fee slabs as of Jul 2026 — verify against current bank/Skydo rate cards before relying on this.</footer>
+</div>
+
+<script>
+function row(label, value, bold) {
+  return '<tr><td class="label">' + label + '</td><td' + (bold ? ' class="bold"' : '') + '>' + value + '</td></tr>';
+}
+function fmt(n) { return n.toLocaleString('en-IN', {maximumFractionDigits: 2}); }
+
+function iciciGST(grossINR) {
+  if (grossINR <= 100000) {
+    return Math.max(grossINR * 0.01, 250) * 0.18;
+  } else if (grossINR <= 1000000) {
+    var taxable = 1000 + (grossINR - 100000) * 0.005;
+    return taxable * 0.18;
+  } else {
+    var taxable2 = 5500 + (grossINR - 1000000) * 0.001;
+    var gst = taxable2 * 0.18;
+    return Math.min(gst, 10800);
+  }
+}
+
+function calc() {
+  var rate = parseFloat(document.getElementById('rate').value) || 0;
+  var amount = parseFloat(document.getElementById('amount').value) || 0;
+
+  var toptalFee = 0.5;
+  var netUSD = amount - toptalFee;
+
+  var skydoFeeUSD;
+  if (netUSD <= 2000) skydoFeeUSD = 19;
+  else if (netUSD <= 10000) skydoFeeUSD = 29;
+  else skydoFeeUSD = netUSD * 0.003;
+  var skydoGST = skydoFeeUSD * 0.18;
+  var skydoUSDAfterFees = netUSD - skydoFeeUSD - skydoGST;
+  var skydoINR = skydoUSDAfterFees * rate;
+
+  document.getElementById('skydo-table').innerHTML =
+    row('Toptal amount', '$' + fmt(amount)) +
+    row('Toptal US transfer fee', '-$' + fmt(toptalFee)) +
+    row('Net USD received', '$' + fmt(netUSD)) +
+    row('Skydo fee', '-$' + fmt(skydoFeeUSD)) +
+    row('GST on fee (18%)', '-$' + fmt(skydoGST)) +
+    row('USD converted', '$' + fmt(skydoUSDAfterFees)) +
+    row('Conversion rate', '\u20b9' + fmt(rate) + '/USD') +
+    row('INR credited', '\u20b9' + fmt(skydoINR), true);
+
+  var toptalWireFee = 10;
+  var netUSD2 = amount - toptalWireFee;
+  var iciciRate = rate - 0.08;
+  var grossINR = netUSD2 * iciciRate;
+  var gst = iciciGST(grossINR);
+  var iciciINR = grossINR - gst;
+
+  document.getElementById('icici-table').innerHTML =
+    row('Toptal amount', '$' + fmt(amount)) +
+    row('Toptal wire transfer fee', '-$' + fmt(toptalWireFee)) +
+    row('Net USD received', '$' + fmt(netUSD2)) +
+    row('ICICI rate (interbank - 8p)', '\u20b9' + fmt(iciciRate) + '/USD') +
+    row('Gross INR (before GST)', '\u20b9' + fmt(grossINR)) +
+    row('GST/CCT', '-\u20b9' + fmt(gst)) +
+    row('INR credited', '\u20b9' + fmt(iciciINR), true);
+
+  document.getElementById('skydo-total').textContent = '\u20b9' + fmt(skydoINR);
+  document.getElementById('icici-total').textContent = '\u20b9' + fmt(iciciINR);
+
+  var diff = skydoINR - iciciINR;
+  var winnerEl = document.getElementById('winner');
+  if (Math.abs(diff) < 1) {
+    winnerEl.textContent = 'Both options credit roughly the same amount.';
+  } else if (diff > 0) {
+    winnerEl.textContent = 'Skydo credits \u20b9' + fmt(diff) + ' more than ICICI.';
+  } else {
+    winnerEl.textContent = 'ICICI credits \u20b9' + fmt(-diff) + ' more than Skydo.';
+  }
+}
+
+document.getElementById('rate').addEventListener('input', calc);
+document.getElementById('amount').addEventListener('input', calc);
+calc();
+</script>
+</body>
+</html>
