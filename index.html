@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Toptal transfer calculator — Skydo vs ICICI</title>
+<title>Toptal transfer calculator — Skydo vs bank wire</title>
 <style>
   :root {
     --surface-2: #ffffff;
@@ -124,12 +124,54 @@
     margin-top: 1.5rem;
   }
   footer a { color: inherit; }
+  .bank-config {
+    background: var(--surface-1);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 12px;
+  }
+  .bank-config .grid-3 {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+  }
+  .bank-config label { margin-bottom: 4px; }
+  .remove-btn {
+    height: 36px;
+    padding: 0 10px;
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .remove-btn:hover { color: #c0392b; border-color: #c0392b; }
+  #add-bank-btn {
+    width: 100%;
+    height: 36px;
+    border-radius: var(--radius);
+    border: 1px dashed var(--border-strong);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    margin-bottom: 1.5rem;
+  }
+  #add-bank-btn:hover { border-color: #5b8def; color: #5b8def; }
+  .totals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Toptal transfer calculator</h1>
-  <p class="subtitle">Compare INR credit: Skydo vs ICICI wire transfer</p>
+  <p class="subtitle">Compare INR credit: Skydo vs bank wire transfer</p>
 
   <div class="grid-2">
     <div>
@@ -143,16 +185,7 @@
     </div>
   </div>
 
-  <div class="grid-2">
-    <div class="card">
-      <p>Skydo net credit</p>
-      <p id="skydo-total">-</p>
-    </div>
-    <div class="card">
-      <p>ICICI net credit</p>
-      <p id="icici-total">-</p>
-    </div>
-  </div>
+  <div class="totals-grid" id="totals-grid"></div>
 
   <div id="winner"></div>
 
@@ -162,8 +195,10 @@
   </div>
 
   <div class="section">
-    <p class="heading">ICICI breakdown</p>
-    <table id="icici-table"></table>
+    <p class="heading">Bank wire transfers</p>
+    <div id="bank-configs"></div>
+    <button id="add-bank-btn" type="button">+ Add bank</button>
+    <div id="bank-breakdowns"></div>
   </div>
 
   <footer>Rates and fee slabs as of Jul 2026 — verify against current bank/Skydo rate cards before relying on this.</footer>
@@ -175,7 +210,7 @@ function row(label, value, bold) {
 }
 function fmt(n) { return n.toLocaleString('en-IN', {maximumFractionDigits: 2}); }
 
-function iciciGST(grossINR) {
+function cctINR(grossINR) {
   if (grossINR <= 100000) {
     return Math.max(grossINR * 0.01, 250) * 0.18;
   } else if (grossINR <= 1000000) {
@@ -186,6 +221,48 @@ function iciciGST(grossINR) {
     var gst = taxable2 * 0.18;
     return Math.min(gst, 10800);
   }
+}
+
+var toptalWireFee = 10;
+var bankIdSeq = 0;
+var banks = [
+  { id: bankIdSeq++, name: 'ICICI', swiftFee: 0, markupPaise: 8 }
+];
+
+function renderBankConfigs() {
+  var container = document.getElementById('bank-configs');
+  container.innerHTML = banks.map(function(b) {
+    return '<div class="bank-config" data-id="' + b.id + '">' +
+      '<div class="grid-3">' +
+        '<div><label>Bank name</label><input type="text" class="bank-name" value="' + b.name + '"></div>' +
+        '<div><label>Inward remittance / SWIFT fee (\u20b9)</label><input type="number" class="bank-swift" value="' + b.swiftFee + '" step="1"></div>' +
+        '<div><label>Bank markup (paise)</label><input type="number" class="bank-markup" value="' + b.markupPaise + '" step="1"></div>' +
+        '<button type="button" class="remove-btn">Remove</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  container.querySelectorAll('.bank-config').forEach(function(el) {
+    var id = parseInt(el.getAttribute('data-id'), 10);
+    var bank = banks.find(function(b) { return b.id === id; });
+    el.querySelector('.bank-name').addEventListener('input', function(e) {
+      bank.name = e.target.value;
+      calc();
+    });
+    el.querySelector('.bank-swift').addEventListener('input', function(e) {
+      bank.swiftFee = parseFloat(e.target.value) || 0;
+      calc();
+    });
+    el.querySelector('.bank-markup').addEventListener('input', function(e) {
+      bank.markupPaise = parseFloat(e.target.value) || 0;
+      calc();
+    });
+    el.querySelector('.remove-btn').addEventListener('click', function() {
+      banks = banks.filter(function(b) { return b.id !== id; });
+      renderBankConfigs();
+      calc();
+    });
+  });
 }
 
 function calc() {
@@ -213,38 +290,59 @@ function calc() {
     row('Conversion rate', '\u20b9' + fmt(rate) + '/USD') +
     row('INR credited', '\u20b9' + fmt(skydoINR), true);
 
-  var toptalWireFee = 10;
   var netUSD2 = amount - toptalWireFee;
-  var iciciRate = rate - 0.08;
-  var grossINR = netUSD2 * iciciRate;
-  var gst = iciciGST(grossINR);
-  var iciciINR = grossINR - gst;
+  var results = [{ name: 'Skydo', total: skydoINR }];
 
-  document.getElementById('icici-table').innerHTML =
-    row('Toptal amount', '$' + fmt(amount)) +
-    row('Toptal wire transfer fee', '-$' + fmt(toptalWireFee)) +
-    row('Net USD received', '$' + fmt(netUSD2)) +
-    row('ICICI rate (interbank - 8p)', '\u20b9' + fmt(iciciRate) + '/USD') +
-    row('Gross INR (before GST)', '\u20b9' + fmt(grossINR)) +
-    row('GST/CCT', '-\u20b9' + fmt(gst)) +
-    row('INR credited', '\u20b9' + fmt(iciciINR), true);
+  var breakdownsHTML = '';
+  banks.forEach(function(b) {
+    var bankRate = rate - b.markupPaise / 100;
+    var grossINR = netUSD2 * bankRate;
+    var swiftFeeGST = b.swiftFee * 0.18;
+    var swiftFeeTotal = b.swiftFee + swiftFeeGST;
+    var cct = cctINR(grossINR);
+    var bankINR = grossINR - swiftFeeTotal - cct;
 
-  document.getElementById('skydo-total').textContent = '\u20b9' + fmt(skydoINR);
-  document.getElementById('icici-total').textContent = '\u20b9' + fmt(iciciINR);
+    results.push({ name: b.name || 'Bank', total: bankINR });
 
-  var diff = skydoINR - iciciINR;
+    breakdownsHTML +=
+      '<div class="section"><p class="heading">' + (b.name || 'Bank') + ' breakdown</p><table>' +
+      row('Toptal amount', '$' + fmt(amount)) +
+      row('Toptal wire transfer fee', '-$' + fmt(toptalWireFee)) +
+      row('Net USD received', '$' + fmt(netUSD2)) +
+      row((b.name || 'Bank') + ' rate (interbank - ' + fmt(b.markupPaise) + 'p)', '\u20b9' + fmt(bankRate) + '/USD') +
+      row('Gross INR (before charges)', '\u20b9' + fmt(grossINR)) +
+      row('SWIFT / inward remittance fee', '-\u20b9' + fmt(b.swiftFee)) +
+      row('GST on SWIFT fee (18%)', '-\u20b9' + fmt(swiftFeeGST)) +
+      row('CCT/GST on conversion', '-\u20b9' + fmt(cct)) +
+      row('INR credited', '\u20b9' + fmt(bankINR), true) +
+      '</table></div>';
+  });
+  document.getElementById('bank-breakdowns').innerHTML = breakdownsHTML;
+
+  document.getElementById('totals-grid').innerHTML = results.map(function(r) {
+    return '<div class="card"><p>' + r.name + ' net credit</p><p>\u20b9' + fmt(r.total) + '</p></div>';
+  }).join('');
+
   var winnerEl = document.getElementById('winner');
-  if (Math.abs(diff) < 1) {
-    winnerEl.textContent = 'Both options credit roughly the same amount.';
-  } else if (diff > 0) {
-    winnerEl.textContent = 'Skydo credits \u20b9' + fmt(diff) + ' more than ICICI.';
+  var best = results.reduce(function(a, b) { return b.total > a.total ? b : a; });
+  var rest = results.filter(function(r) { return r !== best; });
+  var closest = rest.reduce(function(a, b) { return (a === null || b.total > a.total) ? b : a; }, null);
+  if (!closest || Math.abs(best.total - closest.total) < 1) {
+    winnerEl.textContent = 'All options credit roughly the same amount.';
   } else {
-    winnerEl.textContent = 'ICICI credits \u20b9' + fmt(-diff) + ' more than Skydo.';
+    winnerEl.textContent = best.name + ' credits \u20b9' + fmt(best.total - closest.total) + ' more than ' + closest.name + '.';
   }
 }
 
 document.getElementById('rate').addEventListener('input', calc);
 document.getElementById('amount').addEventListener('input', calc);
+document.getElementById('add-bank-btn').addEventListener('click', function() {
+  banks.push({ id: bankIdSeq++, name: '', swiftFee: 0, markupPaise: 0 });
+  renderBankConfigs();
+  calc();
+});
+
+renderBankConfigs();
 calc();
 
 fetch('https://open.er-api.com/v6/latest/USD')
